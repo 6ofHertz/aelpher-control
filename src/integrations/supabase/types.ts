@@ -14,7 +14,201 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_logs: {
+        Row: {
+          action: string
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          created_at: string
+          details: string | null
+          duration_minutes: number | null
+          id: string
+          task_id: string | null
+        }
+        Insert: {
+          action: string
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          created_at?: string
+          details?: string | null
+          duration_minutes?: number | null
+          id?: string
+          task_id?: string | null
+        }
+        Update: {
+          action?: string
+          arm_type?: Database["public"]["Enums"]["arm_type"]
+          created_at?: string
+          details?: string | null
+          duration_minutes?: number | null
+          id?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      milestones: {
+        Row: {
+          amount: number | null
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          category: Database["public"]["Enums"]["milestone_category"]
+          created_at: string
+          description: string | null
+          due_date: string
+          id: string
+          is_completed: boolean
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          category: Database["public"]["Enums"]["milestone_category"]
+          created_at?: string
+          description?: string | null
+          due_date: string
+          id?: string
+          is_completed?: boolean
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          arm_type?: Database["public"]["Enums"]["arm_type"]
+          category?: Database["public"]["Enums"]["milestone_category"]
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          id?: string
+          is_completed?: boolean
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subtopics: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          is_completed: boolean
+          title: string
+          topic_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_completed?: boolean
+          title: string
+          topic_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_completed?: boolean
+          title?: string
+          topic_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtopics_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          status: Database["public"]["Enums"]["task_status"]
+          subtopic_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          status?: Database["public"]["Enums"]["task_status"]
+          subtopic_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          arm_type?: Database["public"]["Enums"]["arm_type"]
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          status?: Database["public"]["Enums"]["task_status"]
+          subtopic_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      topics: {
+        Row: {
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          arm_type: Database["public"]["Enums"]["arm_type"]
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          arm_type?: Database["public"]["Enums"]["arm_type"]
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +217,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      arm_type: "ibm" | "cs"
+      milestone_category: "Assignment" | "Certification" | "Finance"
+      task_status: "pending" | "in_progress" | "completed" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +346,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      arm_type: ["ibm", "cs"],
+      milestone_category: ["Assignment", "Certification", "Finance"],
+      task_status: ["pending", "in_progress", "completed", "blocked"],
+    },
   },
 } as const
