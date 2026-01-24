@@ -1,15 +1,16 @@
 import { useMemo } from 'react';
-import { Briefcase, GraduationCap, Clock, Target, Plus } from 'lucide-react';
+import { Briefcase, GraduationCap } from 'lucide-react';
 import { useDashboardMetrics, useTopics, useSubtopics, useActivityLogs, useNextBestAction } from '@/hooks/useSupabaseData';
+import { CommandCenter } from '@/components/dashboard/CommandCenter';
+import { AIInsightsPanel } from '@/components/dashboard/AIInsightsPanel';
 import { HeroStats } from '@/components/dashboard/HeroStats';
 import { CategoryCard } from '@/components/dashboard/CategoryCard';
 import { UrgentBanner } from '@/components/dashboard/UrgentBanner';
-import { FeynmanCard } from '@/components/dashboard/FeynmanCard';
+import { MomentumTracker } from '@/components/dashboard/MomentumTracker';
+import { QuickActions } from '@/components/dashboard/QuickActions';
 import { ModernActivityFeed } from '@/components/dashboard/ModernActivityFeed';
 import { MilestoneTracker } from '@/components/dashboard/MilestoneTracker';
 import { EmptyState } from '@/components/dashboard/EmptyState';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export function CombinedDashboard() {
   const metrics = useDashboardMetrics();
@@ -17,29 +18,48 @@ export function CombinedDashboard() {
   const { topics: csTopics } = useTopics('cs');
   const allTopics = useMemo(() => [...ibmTopics, ...csTopics], [ibmTopics, csTopics]);
   const topicIds = useMemo(() => allTopics.map(t => t.id), [allTopics]);
-  const { subtopics } = useSubtopics(topicIds);
-  const { logs } = useActivityLogs(undefined, 15);
+  const { subtopics, updateSubtopic } = useSubtopics(topicIds);
+  const { logs, addLog } = useActivityLogs(undefined, 30);
   
   const ibmNba = useNextBestAction('ibm');
   const csNba = useNextBestAction('cs');
   
-  // Calculate streak (simplified - would need proper activity tracking)
+  // Calculate streak
   const streak = useMemo(() => {
-    // Count consecutive days with activity
-    const uniqueDays = new Set(
-      logs.map(log => new Date(log.created_at).toDateString())
-    );
+    const uniqueDays = new Set(logs.map(log => new Date(log.created_at).toDateString()));
     return uniqueDays.size;
   }, [logs]);
   
-  // Calculate weekly tasks completed
+  // Calculate weekly tasks
   const weeklyTasks = useMemo(() => {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     return logs.filter(log => new Date(log.created_at) >= weekAgo).length;
   }, [logs]);
+
+  // Calculate stale count (items not updated in 5+ days)
+  const staleCount = useMemo(() => {
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    return subtopics.filter(s => !s.is_completed && new Date(s.updated_at) < fiveDaysAgo).length;
+  }, [subtopics]);
+
+  // System status
+  const systemStatus = useMemo(() => {
+    if (staleCount > 5) return 'overloaded';
+    if (weeklyTasks >= 10) return 'optimal';
+    if (weeklyTasks >= 5) return 'active';
+    return 'idle';
+  }, [staleCount, weeklyTasks]);
+
+  // Focus score
+  const focusScore = useMemo(() => {
+    const base = Math.min(weeklyTasks * 5, 50);
+    const streakBonus = Math.min(streak * 5, 30);
+    const stalePenalty = staleCount * 5;
+    return Math.max(0, Math.min(100, base + streakBonus - stalePenalty));
+  }, [weeklyTasks, streak, staleCount]);
   
-  // Get subtopic counts per topic
   const getTopicProgress = (topicId: string) => {
     const topicSubs = subtopics.filter(s => s.topic_id === topicId);
     return {
@@ -48,35 +68,53 @@ export function CombinedDashboard() {
     };
   };
   
-  // Find parent topic for NBA
   const ibmNbaParent = ibmNba ? ibmTopics.find(t => t.id === ibmNba.topic_id) : null;
   const csNbaParent = csNba ? csTopics.find(t => t.id === csNba.topic_id) : null;
   
-  // Handle NBA completion
-  const { updateSubtopic } = useSubtopics(topicIds);
   const handleCompleteNba = async (nbaId: string) => {
     await updateSubtopic(nbaId, { is_completed: true });
   };
 
+  const handleLogActivity = async (data: { action: string; details?: string; armType: 'ibm' | 'cs'; durationMinutes?: number }) => {
+    await addLog({
+      action: data.action,
+      details: data.details || null,
+      arm_type: data.armType,
+      duration_minutes: data.durationMinutes || null,
+      task_id: null,
+    });
+  };
+
+  const handleQuickComplete = () => {
+    const nba = ibmNba || csNba;
+    if (nba) handleCompleteNba(nba.id);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Command Center Header */}
+      <CommandCenter 
+        systemStatus={systemStatus}
+        ibmProgress={metrics.ibm.progress}
+        csProgress={metrics.cs.progress}
+        activeTasks={subtopics.filter(s => !s.is_completed).length}
+        focusScore={focusScore}
+      />
+
+      {/* Quick Actions Bar */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Your execution control center
-          </p>
+          <h1 className="text-2xl font-bold text-foreground font-mono">EXECUTION CONTROL</h1>
+          <p className="text-sm text-muted-foreground font-mono">Intelligent tracking & planning system</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Quick Log
-          </Button>
-        </div>
+        <QuickActions 
+          topics={allTopics}
+          onLogActivity={handleLogActivity}
+          onQuickComplete={handleQuickComplete}
+        />
       </div>
 
-      {/* Hero Stats Section */}
+      {/* Hero Stats */}
       <HeroStats 
         streak={streak}
         weeklyTasks={weeklyTasks}
@@ -85,37 +123,53 @@ export function CombinedDashboard() {
         combinedProgress={metrics.combinedProgress}
       />
 
-      {/* Next Best Actions */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <Briefcase className="h-4 w-4 text-primary" />
-            <span className="font-mono text-xs font-semibold uppercase text-muted-foreground">IBM Next Action</span>
+      {/* Main Grid: NBAs + AI Insights */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2 space-y-4">
+          {/* Next Best Actions */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-primary" />
+                <span className="font-mono text-xs font-semibold uppercase text-muted-foreground">IBM Next Action</span>
+              </div>
+              <UrgentBanner 
+                nba={ibmNba}
+                parentTopic={ibmNbaParent}
+                onComplete={() => ibmNba && handleCompleteNba(ibmNba.id)}
+                armType="ibm"
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <GraduationCap className="h-4 w-4 text-accent-foreground" />
+                <span className="font-mono text-xs font-semibold uppercase text-muted-foreground">CS Next Action</span>
+              </div>
+              <UrgentBanner 
+                nba={csNba}
+                parentTopic={csNbaParent}
+                onComplete={() => csNba && handleCompleteNba(csNba.id)}
+                armType="cs"
+              />
+            </div>
           </div>
-          <UrgentBanner 
-            nba={ibmNba}
-            parentTopic={ibmNbaParent}
-            onComplete={() => ibmNba && handleCompleteNba(ibmNba.id)}
-            armType="ibm"
-          />
+
+          {/* Momentum Tracker */}
+          <MomentumTracker logs={logs} daysToShow={14} />
         </div>
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <GraduationCap className="h-4 w-4 text-accent-foreground" />
-            <span className="font-mono text-xs font-semibold uppercase text-muted-foreground">CS Next Action</span>
-          </div>
-          <UrgentBanner 
-            nba={csNba}
-            parentTopic={csNbaParent}
-            onComplete={() => csNba && handleCompleteNba(csNba.id)}
-            armType="cs"
-          />
-        </div>
+
+        {/* AI Insights Panel */}
+        <AIInsightsPanel 
+          ibmProgress={metrics.ibm.progress}
+          csProgress={metrics.cs.progress}
+          streak={streak}
+          weeklyTasks={weeklyTasks}
+          staleCount={staleCount}
+        />
       </div>
 
       {/* Categories Grid */}
       <div className="space-y-4">
-        {/* IBM Categories */}
         {ibmTopics.length > 0 && (
           <div>
             <div className="mb-3 flex items-center gap-2">
@@ -131,19 +185,13 @@ export function CombinedDashboard() {
               {ibmTopics.map(topic => {
                 const progress = getTopicProgress(topic.id);
                 return (
-                  <CategoryCard
-                    key={topic.id}
-                    topic={topic}
-                    completedCount={progress.completed}
-                    totalCount={progress.total}
-                  />
+                  <CategoryCard key={topic.id} topic={topic} completedCount={progress.completed} totalCount={progress.total} />
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* CS Categories */}
         {csTopics.length > 0 && (
           <div>
             <div className="mb-3 flex items-center gap-2">
@@ -159,27 +207,18 @@ export function CombinedDashboard() {
               {csTopics.map(topic => {
                 const progress = getTopicProgress(topic.id);
                 return (
-                  <CategoryCard
-                    key={topic.id}
-                    topic={topic}
-                    completedCount={progress.completed}
-                    totalCount={progress.total}
-                  />
+                  <CategoryCard key={topic.id} topic={topic} completedCount={progress.completed} totalCount={progress.total} />
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* Empty state when no topics */}
-        {allTopics.length === 0 && (
-          <EmptyState type="topics" />
-        )}
+        {allTopics.length === 0 && <EmptyState type="topics" />}
       </div>
 
-      {/* Bottom Grid: Feynman + Activity + Milestones */}
-      <div className="grid grid-cols-3 gap-4">
-        <FeynmanCard />
+      {/* Bottom Grid */}
+      <div className="grid grid-cols-2 gap-4">
         <ModernActivityFeed logs={logs} />
         <MilestoneTracker />
       </div>
